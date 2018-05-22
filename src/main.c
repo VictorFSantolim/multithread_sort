@@ -12,8 +12,8 @@
 #include <pthread.h>
 
 
-//Numero maximo de threads que podem ser disparadas no merge sort
-#define MAX_THREADS 4
+//Numero maximo de niveis que sao disparados com novos threads na recursao
+#define MAX_THREADS_NIVEL 2
 
 //Prototipo da funcao mergesort que as threads executam
 void *mergeSort(void * args);
@@ -22,15 +22,11 @@ void *mergeSort(void * args);
 typedef struct {
     unsigned int ini;
     unsigned int fim;
-    char maisThreads;
+    unsigned int nivel;
 } limitesStruct;
-
-//Trava para evitar crace condition
-pthread_mutex_t trava;
 
 unsigned int entrada[1000];
 unsigned int aux[1000];
-unsigned int numThreads;
 
 int main() {
 
@@ -51,19 +47,18 @@ int main() {
 	limitesStruct *args = malloc(sizeof (limitesStruct));
 	args->ini = 0;
 	args->fim = indice-1;
-	args->maisThreads = 1;
+	args->nivel = 1;
 
   	//Faz a primeira chamada recursiva do MergeSort, sem Threads
   	mergeSort(args);
 
-  	
     //Le o vetor já ordenado e imprime na tela
-    for(unsigned int i = 0 ; i < indice ; i++)
+    for(unsigned int i = 0 ; i < indice-1 ; i++)
     {
     	printf("%u ", entrada[i]);
 
     }
-    printf("\n");
+    printf("%u\n" , entrada[indice-1]);
 
     return 0;
 
@@ -78,7 +73,7 @@ void *mergeSort(void * args)
 	limitesStruct * limites = args;
 	unsigned int ini = limites->ini;
     unsigned int fim = limites->fim;
-    char maisThreads = limites->maisThreads;
+    unsigned int nivel = limites->nivel;
    	free(limites); //Libera a memória
 
    	//Condicao de continuidade da recursao
@@ -92,58 +87,33 @@ void *mergeSort(void * args)
 		limitesStruct *esq = malloc(sizeof (limitesStruct));
 		esq->ini = ini;
 		esq->fim = m;
+		esq->nivel = nivel+1;
 
 		limitesStruct *dir = malloc(sizeof (limitesStruct));
 		dir->ini = m+1;
 		dir->fim = fim;
+		dir->nivel = nivel+1;
 		
-		//Se foi recebido comando de nao criar mais threads
-		if(maisThreads == 0)
+		//Se o nvel maior do que o maximo, nao cria threads
+		if(nivel >= MAX_THREADS_NIVEL)
 		{
 			//Faz a recursão sem criação de novas threads
-			esq->maisThreads = 0;
-			dir->maisThreads = 0;
-
 			mergeSort(esq);
 			mergeSort(dir);
 
 		}
-		else //Foi recebido comando de criação de novas threads
+		else //Nivel mais baixo que o maximo, cria threads
 		{
 			
-			//Verifica se o numero de threads existentes
-			pthread_mutex_lock(&trava);
-			if(numThreads >= MAX_THREADS)
-			{
-				pthread_mutex_unlock(&trava);
+			pthread_t threadEsq, threadDir;
 
-				//Se ultrapassou o número de threads máximas,
-				//faz as proximas chamadas sem recursão
-				esq->maisThreads = 0;
-				dir->maisThreads = 0;
-				mergeSort(esq);
-				mergeSort(dir);
-			}
-			else //Faz recursao com criacao de threads
-			{
-				numThreads += 2;
-				pthread_mutex_unlock(&trava);
+			//Chama recursivamente o mergesort com criacao de novas threads
+			pthread_create(&threadEsq, NULL, mergeSort, esq);
+			pthread_create(&threadDir, NULL, mergeSort, dir);
 
-				esq->maisThreads = 1;
-				dir->maisThreads = 1;
-
-				pthread_t threadEsq, threadDir;
-
-				pthread_create(&threadEsq, NULL, mergeSort, esq);
-				pthread_create(&threadDir, NULL, mergeSort, dir);
-
-				pthread_join(threadEsq, NULL);
-				pthread_join(threadDir, NULL);
-
-				pthread_mutex_lock(&trava);
-				numThreads -= 2;
-				pthread_mutex_unlock(&trava);
-			}
+			//Espera elas retornarem, para poder comecar a intercacalacao
+			pthread_join(threadEsq, NULL);
+			pthread_join(threadDir, NULL);
 		}
 
 
