@@ -25,8 +25,8 @@ typedef struct {
     unsigned int nivel;
 } limitesStruct;
 
-unsigned int entrada[1000];
-unsigned int aux[1000];
+unsigned int entrada[100000];
+unsigned int aux[100000];
 
 int main() {
 
